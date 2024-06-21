@@ -20,7 +20,11 @@ posToHiePos path pos = do
 hiePosToPos :: (MonadIde m, MonadIO m) => AbsPath -> Pos -> MaybeT m Pos
 hiePosToPos path hiePos = do
   hieToSource <- getHieToSource path
-  logInfo $ T.pack $ "path: " ++ show path ++ " getHieToSource: " <> show hieToSource
+  diffCache <- getDiffCache path
+  logInfo $ T.pack $ "path: " ++ show path ++ " hieToSourceDiff: " ++ PositionDiff.printDiffSummary diffCache.hieToSourceDiff
+  source <- getSource path
+  let (_, errs) = PositionDiff.lexWithErrors (T.unpack source)
+  logInfo $ T.pack $ "errs: " ++ show errs
   pure $ PositionDiff.diffPos hiePos hieToSource
 
 hieLineColToLineCol :: (MonadIde m, MonadIO m) => AbsPath -> LineCol -> MaybeT m LineCol

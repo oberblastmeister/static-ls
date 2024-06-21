@@ -2,6 +2,7 @@
 
 module StaticLS.PositionDiff (
   Token (..),
+  TokenDiff,
   mkToken,
   lex,
   diffText,

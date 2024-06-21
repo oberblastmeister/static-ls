@@ -244,6 +244,5 @@ handleDocumentSymbols = LSP.requestHandler SMethod_TextDocumentDocumentSymbol $ 
   let uri = params._textDocument._uri
   path <- ProtoLSP.uriToAbsPath uri
   symbols <- lift $ getDocumentSymbols path
-  lift $ logInfo $ T.pack $ "Document symbols: " <> show symbols
   res $ Right $ InR $ InL $ fmap ProtoLSP.symbolTreeToProto symbols
   pure ()

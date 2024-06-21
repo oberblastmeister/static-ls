@@ -16,7 +16,6 @@ import Data.Pos (LineCol (..))
 import Data.Text qualified as T
 import Development.IDE.GHC.Compat.Util qualified as IDE.GHC.Compat.Util
 import Development.IDE.GHC.Error (
-  realSrcSpanToLocation,
   realSrcSpanToRange,
   srcSpanToFilename,
   srcSpanToRange,
@@ -49,7 +48,11 @@ getDefinition path lineCol = do
   mLocationLinks <- runMaybeT $ do
     hieFile <- getHieFile path
     lineCol' <- lineColToHieLineCol path lineCol
-    lift $ logInfo $ T.pack $ "lineCol': " <> show lineCol'
+    lineCol <- lineColToHieLineCol path lineCol
+    logInfo $ T.pack $ "lineCol: " <> show lineCol
+    logInfo $ T.pack $ "lineCol': " <> show lineCol'
+    getHieToSource <- getHieToSource path
+    logInfo $ T.pack $ "getHieToSource: " <> show getHieToSource
     let identifiersAtPoint =
           join $
             HieDb.pointCommand

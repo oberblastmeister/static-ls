@@ -172,7 +172,7 @@ getUnqualifiedImportCompletions cx = do
   let importsTextHash = Hashable.hash importsText
   let completionCacheRef = env.completionCache
   existingCompletionCache <- IORef.readIORef completionCacheRef
-  if importsTextHash == existingCompletionCache.importsHash
+  if importsTextHash == existingCompletionCache.importsHash && not (null existingCompletionCache.local)
     then do
       logInfo "Using cached completions"
       pure $ fmap textCompletion existingCompletionCache.local

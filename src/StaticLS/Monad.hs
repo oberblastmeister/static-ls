@@ -78,6 +78,7 @@ initEnv wsRoot staticEnvOptions loggerToUse = do
   fileEnv <- IORef.newIORef mkSemantic
   hieCache <- IORef.newIORef mempty
   diffCache <- IORef.newIORef mempty
+  completionCache <- IORef.newIORef (CompletionCache [] 0)
   let logger = Colog.liftLogIO loggerToUse
   pure $
     Env
@@ -85,7 +86,8 @@ initEnv wsRoot staticEnvOptions loggerToUse = do
         fileEnv = fileEnv,
         hieCache,
         diffCache,
-        logger = logger
+        logger = logger,
+        completionCache
       }
 
 runStaticLsM :: Env -> StaticLsM a -> IO a

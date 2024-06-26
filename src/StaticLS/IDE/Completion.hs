@@ -1,15 +1,16 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE MultiWayIf #-}
 
-module StaticLS.IDE.Completion (
-  getCompletion,
-  Context (..),
-  TriggerKind (..),
-  Completion (..),
-  CompletionKind (..),
-  CompletionMessage (..),
-  resolveCompletionEdit,
-)
+module StaticLS.IDE.Completion
+  ( getCompletion,
+    Context (..),
+    TriggerKind (..),
+    Completion (..),
+    CompletionKind (..),
+    CompletionMessage (..),
+    CompletionCache (..),
+    resolveCompletionEdit,
+  )
 where
 
 import AST qualified
@@ -17,6 +18,7 @@ import AST.Haskell qualified as H
 import AST.Haskell qualified as Haskell
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Reader
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Aeson qualified as Aeson
 import Data.Char qualified as Char
@@ -28,6 +30,7 @@ import Data.Function ((&))
 import Data.Functor.Identity qualified as Identity
 import Data.HashSet (HashSet)
 import Data.HashSet qualified as HashSet
+import Data.Hashable qualified as Hashable
 import Data.List qualified as List
 import Data.Maybe qualified as Maybe
 import Data.Path (AbsPath)
@@ -54,6 +57,7 @@ import StaticLS.StaticEnv
 import StaticLS.Tree qualified as Tree
 import StaticLS.Utils (isRightOrThrowT)
 import System.FilePath
+import UnliftIO.IORef qualified as IORef
 
 makeRelativeMaybe :: FilePath -> FilePath -> Maybe FilePath
 makeRelativeMaybe base path = do
@@ -132,8 +136,12 @@ getCompletionsForMods mods = do
     getCompletionsForMod mod
   pure $ concat importCompletions
 
+getImportsText :: Hir.Program -> Text
+getImportsText p = AST.nodeToText p.imports.dynNode.unDynNode
+
 getFileCompletions :: Context -> StaticLsM [Completion]
 getFileCompletions cx = do
+  -- let importsText =
   let path = cx.path
   fileCompletions <-
     runMaybeT $ do
@@ -146,16 +154,37 @@ getFileCompletions cx = do
   fileCompletions <- pure $ Maybe.fromMaybe [] fileCompletions
   pure fileCompletions
 
+getUnqualifiedImportCompletions' :: Context -> Hir.Program -> StaticLsM [Completion]
+getUnqualifiedImportCompletions' cx prog = do
+  let imports = prog.imports.imports
+  let unqualifiedImports = filter (\imp -> not imp.qualified) imports
+  completions <- getCompletionsForMods $ (.mod.text) <$> unqualifiedImports
+  pure $ fmap textCompletion completions
+
 getUnqualifiedImportCompletions :: Context -> StaticLsM [Completion]
 getUnqualifiedImportCompletions cx = do
+  env <- ask
   let path = cx.path
   haskell <- getHaskell path
   let prog = Hir.parseHaskell haskell
   (_errs, prog) <- isRightOrThrowT prog
-  let imports = prog.imports
-  let unqualifiedImports = filter (\imp -> not imp.qualified) imports
-  completions <- getCompletionsForMods $ (.mod.text) <$> unqualifiedImports
-  pure $ fmap textCompletion completions
+  let importsText = getImportsText prog
+  let importsTextHash = Hashable.hash importsText
+  let completionCacheRef = env.completionCache
+  existingCompletionCache <- IORef.readIORef completionCacheRef
+  if importsTextHash == existingCompletionCache.importsHash
+    then do
+      logInfo "Using cached completions"
+      pure $ fmap textCompletion existingCompletionCache.local
+    else do
+      logInfo "Updating cached completions"
+      completions <- getUnqualifiedImportCompletions' cx prog
+      IORef.writeIORef completionCacheRef $
+        CompletionCache
+          { local = fmap (.label) completions,
+            importsHash = importsTextHash
+          }
+      pure completions
 
 data CompletionMode
   = ImportMode !(Maybe Text)
@@ -219,26 +248,26 @@ defaultAlias = \case
 
 bootModules :: [Text]
 bootModules =
-  [ "Data.Text"
-  , "Data.ByteString"
-  , "Data.Map"
-  , "Data.Set"
-  , "Data.IntMap"
-  , "Data.IntSet"
-  , "Data.Sequence"
+  [ "Data.Text",
+    "Data.ByteString",
+    "Data.Map",
+    "Data.Set",
+    "Data.IntMap",
+    "Data.IntSet",
+    "Data.Sequence"
   ]
 
 isModSubseqOf :: Text -> Text -> Bool
 isModSubseqOf sub mod = List.isSubsequenceOf sub' mod' || sub == mod
- where
-  sub' = T.splitOn "." sub
-  mod' = T.splitOn "." mod
+  where
+    sub' = T.splitOn "." sub
+    mod' = T.splitOn "." mod
 
 isModSuffixOf :: Text -> Text -> Bool
 isModSuffixOf sub mod = sub' `List.isSuffixOf` mod'
- where
-  sub' = T.splitOn "." sub
-  mod' = T.splitOn "." mod
+  where
+    sub' = T.splitOn "." sub
+    mod' = T.splitOn "." mod
 
 isBootModule :: Text -> Bool
 isBootModule mod = any (mod `isModSuffixOf`) bootModules
@@ -266,8 +295,8 @@ getFlyImports cx qualifiedCompletions prefix match = do
       fmap
         ( \completion ->
             (textCompletion completion)
-              { description = Just $ formatQualifiedAs mod prefix
-              , msg = Just $ CompletionMessage {path = cx.path, kind = FlyImportCompletionKind mod prefix}
+              { description = Just $ formatQualifiedAs mod prefix,
+                msg = Just $ CompletionMessage {path = cx.path, kind = FlyImportCompletionKind mod prefix}
               }
         )
         modCompletions
@@ -292,13 +321,13 @@ getCompletion cx = do
     UnqualifiedMode -> do
       fileCompletions <- getFileCompletions cx
       importCompletions <- getUnqualifiedImportCompletions cx
-      pure (False, nubOrd $ importCompletions ++ fileCompletions)
+      pure (True, nubOrd $ importCompletions ++ fileCompletions)
     QualifiedMode mod match -> do
       let path = cx.path
       haskell <- getHaskell path
       let prog = Hir.parseHaskell haskell
       (_errs, prog) <- isRightOrThrowT prog
-      let imports = prog.imports
+      let imports = prog.imports.imports
       let importsWithAlias = filter (\imp -> fmap (.text) imp.alias == Just mod) imports
       -- TODO: append both flyimports and normal ones
       qualifiedCompletions <- nubOrd <$> getCompletionsForMods ((.mod.text) <$> importsWithAlias)
@@ -320,8 +349,8 @@ resolveCompletionEdit msg = do
       pure $ Edit.singleton change
 
 data CompletionMessage = CompletionMessage
-  { path :: AbsPath
-  , kind :: CompletionKind
+  { path :: AbsPath,
+    kind :: CompletionKind
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -342,25 +371,25 @@ instance Aeson.ToJSON CompletionKind
 instance Aeson.FromJSON CompletionKind
 
 data Completion = Completion
-  { label :: !Text
-  , insertText :: !Text
-  , labelDetail :: Maybe Text
-  , description :: Maybe Text
-  , detail :: Maybe Text
-  , edit :: !Edit
-  , msg :: Maybe CompletionMessage
+  { label :: !Text,
+    insertText :: !Text,
+    labelDetail :: Maybe Text,
+    description :: Maybe Text,
+    detail :: Maybe Text,
+    edit :: !Edit,
+    msg :: Maybe CompletionMessage
   }
   deriving (Show, Eq, Ord)
 
 mkBootCompletion :: Text -> Text -> Text -> AbsPath -> Completion
 mkBootCompletion mod alias match path =
   (mkCompletion match "")
-    { description = Just $ formatQualifiedAs mod alias
-    , msg =
+    { description = Just $ formatQualifiedAs mod alias,
+      msg =
         Just $
           CompletionMessage
-            { path
-            , kind = FlyImportCompletionKind mod alias
+            { path,
+              kind = FlyImportCompletionKind mod alias
             }
     }
 
@@ -370,22 +399,22 @@ textCompletion text = mkCompletion text text
 mkCompletion :: Text -> Text -> Completion
 mkCompletion label insertText =
   Completion
-    { label
-    , detail = Nothing
-    , labelDetail = Nothing
-    , description = Nothing
-    , insertText
-    , edit = Edit.empty
-    , msg = Nothing
+    { label,
+      detail = Nothing,
+      labelDetail = Nothing,
+      description = Nothing,
+      insertText,
+      edit = Edit.empty,
+      msg = Nothing
     }
 
 data TriggerKind = TriggerCharacter | TriggerUnknown
   deriving (Show, Eq)
 
 data Context = Context
-  { path :: AbsPath
-  , pos :: !Pos
-  , lineCol :: !LineCol
-  , triggerKind :: !TriggerKind
+  { path :: AbsPath,
+    pos :: !Pos,
+    lineCol :: !LineCol,
+    triggerKind :: !TriggerKind
   }
   deriving (Show, Eq)

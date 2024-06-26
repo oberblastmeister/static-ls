@@ -17,13 +17,13 @@ data Name = Name
   }
 
 data Qualified = Qualified
-  { mod :: Module
-  , name :: Name
+  { mod :: Module,
+    name :: Name
   }
 
 data Module = Module
-  { parts :: NonEmpty Text
-  , text :: Text
+  { parts :: NonEmpty Text,
+    text :: Text
   }
   deriving (Show, Eq)
 
@@ -33,18 +33,18 @@ data ImportName = ImportName
   deriving (Show, Eq)
 
 data Import = Import
-  { mod :: Module
-  , alias :: Maybe Module
-  , qualified :: !Bool
-  , hiding :: !Bool
-  , importList :: [ImportName]
+  { mod :: Module,
+    alias :: Maybe Module,
+    qualified :: !Bool,
+    hiding :: !Bool,
+    importList :: [ImportName]
   }
   deriving (Show, Eq)
 
 findNode :: (AST.DynNode -> Maybe b) -> AST.DynNode -> Maybe b
 findNode f n = go n
- where
-  go n = f n <|> asum (go <$> (AST.nodeChildren n))
+  where
+    go n = f n <|> asum (go <$> (AST.nodeChildren n))
 
 parseImportName :: H.ImportName -> AST.Err ImportName
 parseImportName name = do
@@ -64,8 +64,8 @@ parseModule m = do
     Module
       { text =
           -- the text sometimes includes trailing dots
-          T.dropWhileEnd (== '.') (AST.nodeToText m)
-      , parts = fmap AST.nodeToText ids
+          T.dropWhileEnd (== '.') (AST.nodeToText m),
+        parts = fmap AST.nodeToText ids
       }
 
 parseImport :: H.Import -> AST.Err Import
@@ -81,11 +81,11 @@ parseImport i = do
   let hiding = Maybe.isJust $ findNode (AST.cast @(AST.Token "hiding")) (AST.getDynNode i)
   pure
     Import
-      { mod
-      , alias
-      , qualified
-      , hiding
-      , importList
+      { mod,
+        alias,
+        qualified,
+        hiding,
+        importList
       }
 
 parseQualified :: H.Qualified -> AST.Err Qualified
@@ -103,16 +103,35 @@ getQualifiedAtPoint lineCol h = do
   qualified <- traverse parseQualified node
   pure qualified
 
-parseImports :: H.Imports -> AST.Err ([Text], [Import])
+data Imports = Imports
+  { imports :: [Import],
+    dynNode :: AST.WrappedDynNode
+  }
+  deriving (Show, Eq)
+
+emptyImports :: Imports
+emptyImports =
+  Imports
+    { imports = [],
+      dynNode = AST.WrappedDynNode AST.defaultNode
+    }
+
+parseImports :: H.Imports -> AST.Err ([Text], Imports)
 parseImports i = do
   import' <- i.import'
   let (es, imports) = Either.partitionEithers (NE.toList import')
   imports <- pure $ parseImport <$> imports
   let (es', imports') = Either.partitionEithers imports
-  pure (es ++ es', imports')
+  pure
+    ( es ++ es',
+      Imports
+        { imports = imports',
+          dynNode = i.dynNode
+        }
+    )
 
 data Program = Program
-  { imports :: [Import]
+  { imports :: Imports
   }
   deriving (Show, Eq)
 
@@ -120,6 +139,6 @@ parseHaskell :: H.Haskell -> AST.Err ([Text], Program)
 parseHaskell h = do
   imports <- AST.collapseErr h.imports
   (es, imports) <- case imports of
-    Nothing -> pure ([], [])
+    Nothing -> pure ([], emptyImports)
     Just imports -> parseImports imports
   pure (es, Program {imports})

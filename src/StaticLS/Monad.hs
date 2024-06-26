@@ -5,6 +5,7 @@ import Control.Monad.Reader
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HashMap
 import Data.Path (AbsPath)
+import Data.Text (Text)
 import StaticLS.IDE.Monad
 import StaticLS.Logger
 import StaticLS.Semantic
@@ -12,16 +13,22 @@ import StaticLS.StaticEnv
 import StaticLS.StaticEnv.Options
 import UnliftIO.IORef qualified as IORef
 
+data CompletionCache = CompletionCache
+  { local :: [Text],
+    importsHash :: Int
+  }
+
 -- | An environment for running a language server
 -- This differs from a `StaticEnv` in that it includes mutable information
 -- meant for language server specific functionality
 data Env = Env
-  { fileEnv :: IORef.IORef Semantic
-  , staticEnv :: StaticEnv
-  , logger :: Logger
-  , -- map from src path to cached hie file
-    hieCache :: IORef.IORef (HashMap AbsPath CachedHieFile)
-  , diffCache :: IORef.IORef (HashMap AbsPath DiffCache)
+  { fileEnv :: IORef.IORef Semantic,
+    staticEnv :: StaticEnv,
+    logger :: Logger,
+    -- map from src path to cached hie file
+    hieCache :: IORef.IORef (HashMap AbsPath CachedHieFile),
+    diffCache :: IORef.IORef (HashMap AbsPath DiffCache),
+    completionCache :: IORef.IORef CompletionCache
   }
 
 type StaticLsM = ReaderT Env IO
@@ -74,11 +81,11 @@ initEnv wsRoot staticEnvOptions loggerToUse = do
   let logger = Colog.liftLogIO loggerToUse
   pure $
     Env
-      { staticEnv = staticEnv
-      , fileEnv = fileEnv
-      , hieCache
-      , diffCache
-      , logger = logger
+      { staticEnv = staticEnv,
+        fileEnv = fileEnv,
+        hieCache,
+        diffCache,
+        logger = logger
       }
 
 runStaticLsM :: Env -> StaticLsM a -> IO a

@@ -100,7 +100,7 @@ initServer reactorChan staticEnvOptions logger serverConfig _ = do
     wsRoot <- Path.filePathToAbs wsRoot
     env <- ExceptT $ Right <$> initEnv wsRoot staticEnvOptions logger
     _ <- liftIO $ Conc.forkIO $ runStaticLsM env $ reactor reactorChan logger
-    _ <- liftIO $ Conc.forkIO $ fileWatcher reactorChan env.staticEnv logger
+    -- _ <- liftIO $ Conc.forkIO $ fileWatcher reactorChan env.staticEnv logger
     pure serverConfig
  where
   getWsRoot :: LSP.LspM config (Either ResponseError FilePath)

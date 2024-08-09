@@ -88,13 +88,15 @@ retrieveHover path lineCol = do
     srcEnd <- hieLineColToLineCol path lineColRange.end
     pure $ ProtoLSP.lineColRangeToProto (LineColRange srcStart srcEnd)
 
-docsAtPoint :: (HasCallStack, HasStaticEnv m, MonadIO m) => HieView.File -> LineCol -> m [NameDocs]
+docsAtPoint :: (HasCallStack, MonadIde m) => HieView.File -> LineCol -> m [NameDocs]
 docsAtPoint hieView position = do
   let
-      -- names = fmap HieView.Name.toGHCName $ HieView.Query.fileNamesAtRangeList (Just (LineColRange.point position)) hieView
-      names = namesAtPoint hieFile (lineColToHieDbCoords position)
-      modNames = fmap GHC.moduleName . mapMaybe GHC.nameModule_maybe $ names
+      names = HieView.Query.fileNamesAtRangeList (Just (LineColRange.point position)) hieView
+      namesGhc = fmap HieView.Name.toGHCName names 
+      -- names = namesAtPoint hieFile (lineColToHieDbCoords position)
+      modNames = fmap GHC.moduleName . mapMaybe GHC.nameModule_maybe $ namesGhc
+  logInfo $ "names: " <> T.pack (show names)
   modIfaceFiles <- fromMaybe [] <$> runMaybeT (mapM modToHiFile modNames)
   modIfaces <- catMaybes <$> mapM (runMaybeT . readHiFile . Path.toFilePath) modIfaceFiles
-  let docs = getDocsBatch names =<< modIfaces
+  let docs = getDocsBatch namesGhc =<< modIfaces
   pure docs

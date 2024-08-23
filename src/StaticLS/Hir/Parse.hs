@@ -233,11 +233,11 @@ parseExportList exports = do
   moduleExports <- traverse parseModuleExportItem moduleExports
   pure $ normalExports ++ moduleExports
 
-parseImportList :: H.ImportList -> AST.Err [ImportItem]
+parseImportList :: H.ImportList -> AST.Err ImportList
 parseImportList i = do
   name <- AST.collapseErr i.name
   items <- traverse parseImportItem name
-  pure items
+  pure ImportList {items, node = i}
 
 parseModuleText :: H.Module -> AST.Err ModuleText
 parseModuleText m = do
@@ -263,7 +263,6 @@ parseImport i = do
   alias <- traverse parseModuleText alias
   importList <- AST.collapseErr i.names
   importList <- traverse parseImportList importList
-  importList <- pure $ Maybe.fromMaybe [] importList
   let qualified = Maybe.isJust $ findNode (AST.cast @(AST.Token "qualified")) (AST.getDynNode i)
   let hiding = Maybe.isJust $ findNode (AST.cast @(AST.Token "hiding")) (AST.getDynNode i)
   pure

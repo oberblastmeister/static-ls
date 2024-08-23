@@ -83,6 +83,12 @@ data ImportItem = ImportItem
   }
   deriving (Show)
 
+data ImportList = ImportList
+  { items :: [ImportItem]
+  , node :: H.ImportList
+  }
+  deriving (Show)
+
 data ExportChildren
   = ExportAllChildren
   | ExportChild NameSpace Qualified
@@ -111,12 +117,12 @@ data Import = Import
   , alias :: Maybe ModuleText
   , qualified :: !Bool
   , hiding :: !Bool
-  , importList :: [ImportItem]
+  , importList :: Maybe ImportList
   }
   deriving (Show)
 
 pattern OpenImport :: ModuleText -> Import
-pattern OpenImport mod = Import {mod, alias = Nothing, qualified = False, hiding = False, importList = []}
+pattern OpenImport mod = Import {mod, alias = Nothing, qualified = False, hiding = False, importList = Nothing}
 
 type ParseNameTypes =
   Haskell.Name

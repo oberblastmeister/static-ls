@@ -28,6 +28,7 @@ src1 =
 
   import First (First, C(type Ty, (:+:), .., first, (+++)))
   import Second (First, C(.., first, type Another, (+++))) as Another
+  import OpenImport
   |]
 
 src2 =
@@ -283,42 +284,47 @@ tests =
             , alias = Nothing
             , qualified = False
             , hiding = False
-            , importList =
-                [ ImportItem
-                    { namespace = NameSpaceValue
-                    , name = NameShow
-                        { name = "First"
-                        , node = "name@(34 - 39)"
-                        }
-                    , children = []
-                    }
-                , ImportItem
-                    { namespace = NameSpaceValue
-                    , name = NameShow
-                        { name = "C"
-                        , node = "name@(41 - 42)"
-                        }
-                    , children =
-                        [ ImportChild NameSpaceType NameShow
-                            { name = "Ty"
-                            , node = "name@(48 - 50)"
+            , importList = Just
+                ( ImportList
+                    { items =
+                        [ ImportItem
+                            { namespace = NameSpaceValue
+                            , name = NameShow
+                                { name = "First"
+                                , node = "name@(34 - 39)"
+                                }
+                            , children = []
                             }
-                        , ImportChild NameSpaceValue NameShow
-                            { name = ":+:"
-                            , node = "constructor_operator@(53 - 56)"
-                            }
-                        , ImportAllChildren
-                        , ImportChild NameSpaceValue NameShow
-                            { name = "first"
-                            , node = "variable@(63 - 68)"
-                            }
-                        , ImportChild NameSpaceValue NameShow
-                            { name = "+++"
-                            , node = "operator@(71 - 74)"
+                        , ImportItem
+                            { namespace = NameSpaceValue
+                            , name = NameShow
+                                { name = "C"
+                                , node = "name@(41 - 42)"
+                                }
+                            , children =
+                                [ ImportChild NameSpaceType NameShow
+                                    { name = "Ty"
+                                    , node = "name@(48 - 50)"
+                                    }
+                                , ImportChild NameSpaceValue NameShow
+                                    { name = ":+:"
+                                    , node = "constructor_operator@(53 - 56)"
+                                    }
+                                , ImportAllChildren
+                                , ImportChild NameSpaceValue NameShow
+                                    { name = "first"
+                                    , node = "variable@(63 - 68)"
+                                    }
+                                , ImportChild NameSpaceValue NameShow
+                                    { name = "+++"
+                                    , node = "operator@(71 - 74)"
+                                    }
+                                ]
                             }
                         ]
+                    , node = "import_list@(33 - 77)"
                     }
-                ]
+                )
             }
         , Import
             { mod = ModuleText
@@ -328,38 +334,43 @@ tests =
             , alias = Nothing
             , qualified = False
             , hiding = False
-            , importList =
-                [ ImportItem
-                    { namespace = NameSpaceValue
-                    , name = NameShow
-                        { name = "First"
-                        , node = "name@(93 - 98)"
-                        }
-                    , children = []
-                    }
-                , ImportItem
-                    { namespace = NameSpaceValue
-                    , name = NameShow
-                        { name = "C"
-                        , node = "name@(100 - 101)"
-                        }
-                    , children =
-                        [ ImportAllChildren
-                        , ImportChild NameSpaceValue NameShow
-                            { name = "first"
-                            , node = "variable@(106 - 111)"
+            , importList = Just
+                ( ImportList
+                    { items =
+                        [ ImportItem
+                            { namespace = NameSpaceValue
+                            , name = NameShow
+                                { name = "First"
+                                , node = "name@(93 - 98)"
+                                }
+                            , children = []
                             }
-                        , ImportChild NameSpaceType NameShow
-                            { name = "Another"
-                            , node = "name@(118 - 125)"
-                            }
-                        , ImportChild NameSpaceValue NameShow
-                            { name = "+++"
-                            , node = "operator@(128 - 131)"
+                        , ImportItem
+                            { namespace = NameSpaceValue
+                            , name = NameShow
+                                { name = "C"
+                                , node = "name@(100 - 101)"
+                                }
+                            , children =
+                                [ ImportAllChildren
+                                , ImportChild NameSpaceValue NameShow
+                                    { name = "first"
+                                    , node = "variable@(106 - 111)"
+                                    }
+                                , ImportChild NameSpaceType NameShow
+                                    { name = "Another"
+                                    , node = "name@(118 - 125)"
+                                    }
+                                , ImportChild NameSpaceValue NameShow
+                                    { name = "+++"
+                                    , node = "operator@(128 - 131)"
+                                    }
+                                ]
                             }
                         ]
+                    , node = "import_list@(92 - 134)"
                     }
-                ]
+                )
             }
         ]
     , exports = []
